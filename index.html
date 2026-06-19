@@ -11,7 +11,7 @@
       integrity="sha256-p4NxAoJBhIINfQK3p2ATbUXiOqMkpOun8i3Tf4phxDk="
       crossorigin=""
     />
-    <link rel="stylesheet" href="./styles.css?v=hidden-key-20260619" />
+    <link rel="stylesheet" href="./styles.css?v=cute-train-20260620" />
     <style>
       .app-internals[hidden] {
         display: none !important;
@@ -19,6 +19,101 @@
 
       .control-grid {
         grid-template-columns: minmax(0, 1fr);
+      }
+
+      .train-map-icon {
+        border: 0;
+        background: transparent;
+      }
+
+      .map-train {
+        position: relative;
+        display: block;
+        width: 44px;
+        height: 48px;
+        filter: drop-shadow(0 8px 12px rgba(20, 24, 32, 0.24));
+      }
+
+      .map-train-face {
+        position: absolute;
+        inset: 2px 3px 8px;
+        display: block;
+        border: 3px solid #fff;
+        border-radius: 15px 15px 12px 12px;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0) 38%),
+          var(--train-color);
+      }
+
+      .map-train-face::after {
+        position: absolute;
+        right: 11px;
+        bottom: 7px;
+        left: 11px;
+        height: 4px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.92);
+        content: "";
+      }
+
+      .map-train-window {
+        position: absolute;
+        top: 7px;
+        right: 7px;
+        left: 7px;
+        height: 13px;
+        border-radius: 6px 6px 4px 4px;
+        background:
+          linear-gradient(90deg, transparent calc(50% - 1px), rgba(20, 24, 32, 0.14) 0 calc(50% + 1px), transparent 0),
+          #eaf8ff;
+        box-shadow: inset 0 -2px 0 rgba(20, 24, 32, 0.08);
+      }
+
+      .map-train-lights {
+        position: absolute;
+        right: 8px;
+        bottom: 10px;
+        left: 8px;
+        display: flex;
+        justify-content: space-between;
+      }
+
+      .map-train-lights i {
+        width: 6px;
+        height: 6px;
+        border-radius: 999px;
+        background: #fff7c2;
+        box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.55);
+      }
+
+      .map-train::after {
+        position: absolute;
+        bottom: 2px;
+        left: 50%;
+        width: 22px;
+        height: 8px;
+        border-radius: 0 0 999px 999px;
+        background: #fff;
+        content: "";
+        transform: translateX(-50%);
+      }
+
+      .map-train-badge {
+        position: absolute;
+        top: -2px;
+        right: -2px;
+        display: grid;
+        min-width: 20px;
+        height: 20px;
+        padding: 0 5px;
+        place-items: center;
+        border: 2px solid #fff;
+        border-radius: 999px;
+        background: #111827;
+        color: #fff;
+        font-size: 11px;
+        font-weight: 900;
+        line-height: 1;
       }
     </style>
   </head>
@@ -137,7 +232,39 @@
           return originalFetch(input, init);
         };
       }
+
+      if (window.L && !window.L.__cuteTrainMarkerPatched) {
+        const originalCircleMarker = window.L.circleMarker.bind(window.L);
+        const inferTrainCount = (radius) => Math.max(1, Math.round((Number(radius || 8) - 8) / 1.3));
+        const cuteTrainIcon = (color, count) =>
+          window.L.divIcon({
+            className: "train-map-icon",
+            html: `
+              <span class="map-train" style="--train-color:${color}">
+                <span class="map-train-face" aria-hidden="true">
+                  <span class="map-train-window"></span>
+                  <span class="map-train-lights"><i></i><i></i></span>
+                </span>
+                ${count > 1 ? `<span class="map-train-badge">${count}</span>` : ""}
+              </span>
+            `,
+            iconSize: [44, 48],
+            iconAnchor: [22, 42],
+            popupAnchor: [0, -36],
+          });
+
+        window.L.circleMarker = (latlng, options = {}) => {
+          const isTrainMarker = options.fillOpacity === 0.78 && options.weight === 3;
+          if (!isTrainMarker) return originalCircleMarker(latlng, options);
+
+          return window.L.marker(latlng, {
+            icon: cuteTrainIcon(options.fillColor || options.color || "#141820", inferTrainCount(options.radius)),
+            zIndexOffset: 100,
+          });
+        };
+        window.L.__cuteTrainMarkerPatched = true;
+      }
     </script>
-    <script src="./app.js?v=hidden-key-20260619"></script>
+    <script src="./app.js?v=cute-train-20260620"></script>
   </body>
 </html>
