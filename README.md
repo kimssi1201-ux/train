@@ -16,6 +16,7 @@ python -m http.server 8080
 
 - 로컬에서는 브라우저에 저장된 인증키가 있으면 자동으로 사용하고, 없으면 공식 샘플 인증키 `sample`을 사용합니다.
 - Cloudflare Pages에서는 `SEOUL_SUBWAY_API_KEY` 환경변수에 서울 열린데이터광장 인증키를 저장하면 앱 화면이나 프론트 JS에 키를 노출하지 않고 실시간 위치를 호출합니다.
+- 공공데이터포털 TAGO 지하철정보 키는 `TAGO_SUBWAY_API_KEY` 환경변수에 저장합니다. 이 키는 역 검색, 출구별 버스노선, 출구별 주변시설, 역별 시간표 조회용이며 실시간 열차 위치 API는 아닙니다.
 - 샘플 키는 API 제한 때문에 노선별 최대 5건만 표시됩니다.
 - 현재 앱에 포함한 지원 노선: 1-9호선, 경의중앙선, 공항철도, 경춘선, 수인분당선, 신분당선, 우이신설선, 서해선, 신림선, 경강선, GTX-A, 용인 에버라인.
 - 용인 에버라인은 앱 탭에 포함되어 있지만, 서울 열린데이터광장 실시간 위치 API에서는 현재 0건으로 응답될 수 있습니다.
@@ -29,5 +30,8 @@ python -m http.server 8080
 - Framework preset: `None`
 - Build command: 비워두기
 - Build output directory: `/` 또는 `.`
-- Environment variables: `SEOUL_SUBWAY_API_KEY`에 서울 열린데이터광장 인증키 저장
+- Environment variables:
+  - `SEOUL_SUBWAY_API_KEY`: 서울 열린데이터광장 지하철 실시간 열차 위치정보 인증키
+  - `TAGO_SUBWAY_API_KEY`: 공공데이터포털 국토교통부_(TAGO)_지하철정보 인증키
 - `functions/api/subway/[[path]].js`가 서울 열린데이터광장 HTTP API를 프록시하고 서버에서 인증키를 붙이므로 HTTPS 배포에서도 키가 화면에 보이지 않습니다.
+- `functions/api/tago/subway/[[path]].js`가 TAGO 지하철정보 API를 프록시합니다. 예: `/api/tago/subway/GetKwrdFndSubwaySttnList?subwayStationName=강남`
