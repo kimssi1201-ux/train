@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#111827" />
+    <title>지하철 로케이션</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIINfQK3p2ATbUXiOqMkpOun8i3Tf4phxDk="
+      crossorigin=""
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <svg class="brand-logo" viewBox="0 0 64 64" aria-hidden="true">
+            <path class="logo-pin" d="M32 4c-13.3 0-24 10.7-24 24 0 17.5 24 32 24 32s24-14.5 24-32C56 14.7 45.3 4 32 4Z" />
+            <path class="logo-tunnel" d="M20 22c0-5.5 4.5-10 10-10h4c5.5 0 10 4.5 10 10v14c0 3.3-2.7 6-6 6H26c-3.3 0-6-2.7-6-6V22Z" />
+            <path class="logo-window" d="M24 23c0-3.3 2.7-6 6-6h4c3.3 0 6 2.7 6 6v5H24v-5Z" />
+            <path class="logo-track" d="M25 47h14M29 42l-5 8M35 42l5 8" />
+            <circle class="logo-light" cx="26" cy="35" r="2.2" />
+            <circle class="logo-light" cx="38" cy="35" r="2.2" />
+          </svg>
+          <div>
+            <h1>지하철 로케이션</h1>
+            <p id="statusText">실시간 위치 불러오는 중</p>
+          </div>
+        </div>
+        <button class="icon-button" id="refreshButton" type="button" title="새로고침" aria-label="새로고침">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M21 12a9 9 0 0 1-15.4 6.4M3 12A9 9 0 0 1 18.4 5.6" />
+            <path d="M21 4v6h-6M3 20v-6h6" />
+          </svg>
+        </button>
+      </header>
+
+      <main>
+        <section class="control-band" aria-label="검색과 필터">
+          <div class="line-tabs" id="lineTabs"></div>
+          <div class="control-grid">
+            <label class="field">
+              <span>검색</span>
+              <input id="searchInput" type="search" placeholder="역명, 행선지, 열차번호" autocomplete="off" />
+            </label>
+            <label class="field api-field">
+              <span>API 인증키</span>
+              <input id="apiKeyInput" type="password" placeholder="sample" autocomplete="off" />
+            </label>
+            <button class="text-button" id="saveKeyButton" type="button">저장</button>
+            <label class="switch">
+              <input id="autoRefresh" type="checkbox" checked />
+              <span></span>
+              <strong>자동</strong>
+            </label>
+          </div>
+        </section>
+
+        <section class="metric-grid" aria-label="요약">
+          <article class="metric">
+            <span>표시 열차</span>
+            <strong id="visibleCount">0</strong>
+          </article>
+          <article class="metric">
+            <span>지원 노선</span>
+            <strong id="lineCount">0</strong>
+          </article>
+          <article class="metric">
+            <span>기준 시각</span>
+            <strong id="updatedAt">-</strong>
+          </article>
+          <article class="metric">
+            <span>데이터</span>
+            <strong id="dataMode">sample</strong>
+          </article>
+        </section>
+
+        <section class="board-section map-section" aria-label="지도 위치">
+          <div class="section-heading">
+            <div>
+              <h2>지도</h2>
+              <p id="mapSummary">역 좌표 불러오는 중</p>
+            </div>
+            <button class="text-button" id="fitMapButton" type="button">맞춤</button>
+          </div>
+          <div class="map-canvas" id="mapCanvas"></div>
+        </section>
+
+        <section class="board-section" aria-label="노선별 위치">
+          <div class="section-heading">
+            <div>
+              <h2>노선 위치</h2>
+              <p id="lineSummary">전체 노선</p>
+            </div>
+            <select id="sortSelect" aria-label="정렬">
+              <option value="line">노선순</option>
+              <option value="station">역순</option>
+              <option value="time">최신순</option>
+              <option value="status">상태순</option>
+            </select>
+          </div>
+          <div class="track-board" id="trackBoard"></div>
+        </section>
+
+        <section class="board-section" aria-label="열차 목록">
+          <div class="section-heading">
+            <div>
+              <h2>열차 목록</h2>
+              <p id="trainSummary">불러오는 중</p>
+            </div>
+          </div>
+          <div class="train-grid" id="trainList"></div>
+        </section>
+      </main>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script
+      src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
