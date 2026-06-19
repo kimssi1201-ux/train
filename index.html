@@ -11,7 +11,7 @@
       integrity="sha256-p4NxAoJBhIINfQK3p2ATbUXiOqMkpOun8i3Tf4phxDk="
       crossorigin=""
     />
-    <link rel="stylesheet" href="./styles.css?v=cute-train-20260620" />
+    <link rel="stylesheet" href="./styles.css?v=status-labels-20260620" />
     <style>
       .app-internals[hidden] {
         display: none !important;
@@ -29,15 +29,18 @@
       .map-train {
         position: relative;
         display: block;
-        width: 44px;
-        height: 48px;
+        width: 68px;
+        height: 68px;
         filter: drop-shadow(0 8px 12px rgba(20, 24, 32, 0.24));
       }
 
       .map-train-face {
         position: absolute;
-        inset: 2px 3px 8px;
+        top: 2px;
+        left: 15px;
         display: block;
+        width: 38px;
+        height: 38px;
         border: 3px solid #fff;
         border-radius: 15px 15px 12px 12px;
         background:
@@ -88,7 +91,7 @@
 
       .map-train::after {
         position: absolute;
-        bottom: 2px;
+        top: 38px;
         left: 50%;
         width: 22px;
         height: 8px;
@@ -101,7 +104,7 @@
       .map-train-badge {
         position: absolute;
         top: -2px;
-        right: -2px;
+        right: 8px;
         display: grid;
         min-width: 20px;
         height: 20px;
@@ -114,6 +117,61 @@
         font-size: 11px;
         font-weight: 900;
         line-height: 1;
+      }
+
+      .map-train-status {
+        position: absolute;
+        bottom: 0;
+        left: 50%;
+        display: grid;
+        min-width: 38px;
+        height: 21px;
+        padding: 0 7px;
+        place-items: center;
+        border: 2px solid #fff;
+        border-radius: 999px;
+        background: #eef2f6;
+        color: #344054;
+        font-size: 11px;
+        font-weight: 900;
+        line-height: 1;
+        white-space: nowrap;
+        transform: translateX(-50%);
+      }
+
+      .map-train.status-arrive .map-train-status,
+      .status-chip.status-arrive {
+        background: #dcfce7;
+        color: #166534;
+      }
+
+      .map-train.status-depart .map-train-status,
+      .status-chip.status-depart {
+        background: #e0f2fe;
+        color: #075985;
+      }
+
+      .map-train.status-enter .map-train-status,
+      .status-chip.status-enter {
+        background: #fef3c7;
+        color: #92400e;
+      }
+
+      .status-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        margin-top: 7px;
+      }
+
+      .status-chip {
+        display: inline-grid;
+        min-height: 22px;
+        padding: 0 8px;
+        place-items: center;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 900;
       }
     </style>
   </head>
@@ -189,6 +247,11 @@
             <div>
               <h2>지도</h2>
               <p id="mapSummary">역 좌표 불러오는 중</p>
+              <div class="status-legend" aria-label="열차 상태">
+                <span class="status-chip status-arrive">정차</span>
+                <span class="status-chip status-depart">출발</span>
+                <span class="status-chip status-enter">진입</span>
+              </div>
             </div>
             <button class="text-button" id="fitMapButton" type="button">맞춤</button>
           </div>
@@ -236,35 +299,53 @@
       if (window.L && !window.L.__cuteTrainMarkerPatched) {
         const originalCircleMarker = window.L.circleMarker.bind(window.L);
         const inferTrainCount = (radius) => Math.max(1, Math.round((Number(radius || 8) - 8) / 1.3));
-        const cuteTrainIcon = (color, count) =>
+        const inferStatusIndex = (content) => {
+          const text = String(content || "");
+          if (text.includes("출발")) return 2;
+          if (text.includes("진입")) return 0;
+          if (text.includes("도착") || text.includes("정차")) return 1;
+          return 1;
+        };
+        const statusLabels = ["진입", "정차", "출발", "전역출발"];
+        const statusClasses = ["status-enter", "status-arrive", "status-depart", "status-depart"];
+        const cuteTrainIcon = (color, count, statusIndex = 1) =>
           window.L.divIcon({
             className: "train-map-icon",
             html: `
-              <span class="map-train" style="--train-color:${color}">
+              <span class="map-train ${statusClasses[statusIndex] || ""}" style="--train-color:${color}">
                 <span class="map-train-face" aria-hidden="true">
                   <span class="map-train-window"></span>
                   <span class="map-train-lights"><i></i><i></i></span>
                 </span>
                 ${count > 1 ? `<span class="map-train-badge">${count}</span>` : ""}
+                <span class="map-train-status">${statusLabels[statusIndex] || "상태"}</span>
               </span>
             `,
-            iconSize: [44, 48],
-            iconAnchor: [22, 42],
-            popupAnchor: [0, -36],
+            iconSize: [68, 68],
+            iconAnchor: [34, 56],
+            popupAnchor: [0, -52],
           });
 
         window.L.circleMarker = (latlng, options = {}) => {
           const isTrainMarker = options.fillOpacity === 0.78 && options.weight === 3;
           if (!isTrainMarker) return originalCircleMarker(latlng, options);
-
-          return window.L.marker(latlng, {
-            icon: cuteTrainIcon(options.fillColor || options.color || "#141820", inferTrainCount(options.radius)),
+          const color = options.fillColor || options.color || "#141820";
+          const count = inferTrainCount(options.radius);
+          const marker = window.L.marker(latlng, {
+            icon: cuteTrainIcon(color, count, 1),
             zIndexOffset: 100,
           });
+          const originalBindPopup = marker.bindPopup.bind(marker);
+          marker.bindPopup = (content, bindOptions) => {
+            marker.setIcon(cuteTrainIcon(color, count, inferStatusIndex(content)));
+            return originalBindPopup(content, bindOptions);
+          };
+
+          return marker;
         };
         window.L.__cuteTrainMarkerPatched = true;
       }
     </script>
-    <script src="./app.js?v=cute-train-20260620"></script>
+    <script src="./app.js?v=status-labels-20260620"></script>
   </body>
 </html>
