@@ -121,9 +121,7 @@ const els = {
   mapSummary: document.querySelector("#mapSummary"),
   fitMapButton: document.querySelector("#fitMapButton"),
   lineSummary: document.querySelector("#lineSummary"),
-  trainSummary: document.querySelector("#trainSummary"),
   trackBoard: document.querySelector("#trackBoard"),
-  trainList: document.querySelector("#trainList"),
   sortSelect: document.querySelector("#sortSelect"),
   toast: document.querySelector("#toast"),
 };
@@ -168,26 +166,48 @@ function bindEvents() {
 }
 
 function renderLineTabs() {
-  const tabs = [
-    { name: "all", label: "전체", short: "ALL", color: "#141820" },
-    ...LINES.map((line) => ({ name: line.name, label: line.name, short: line.short, color: line.color })),
+  const allTab = { name: "all", label: "전체", short: "ALL", color: "#141820" };
+  const numberLines = LINES.filter((line) => /^[1-9]호선$/.test(line.name));
+  const otherLines = LINES.filter((line) => !/^[1-9]호선$/.test(line.name));
+  const groups = [
+    { title: "전체·1-9호선", className: "is-numbered", tabs: [allTab, ...numberLines] },
+    { title: "광역·기타", className: "is-other", tabs: otherLines },
   ];
 
   els.lineTabs.replaceChildren(
-    ...tabs.map((tab) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = `line-tab${state.selectedLine === tab.name ? " is-active" : ""}`;
-      button.style.setProperty("--line-color", tab.color);
-      button.innerHTML = `<span class="line-dot"></span><span>${tab.label}</span>`;
-      button.addEventListener("click", () => {
-        state.selectedLine = tab.name;
-        renderLineTabs();
-        refresh();
-      });
-      return button;
+    ...groups.map((group) => {
+      const section = document.createElement("section");
+      section.className = `line-tab-group ${group.className}`;
+      const heading = document.createElement("h2");
+      heading.className = "line-tab-heading";
+      heading.textContent = group.title;
+      const grid = document.createElement("div");
+      grid.className = "line-tab-grid";
+
+      grid.replaceChildren(...group.tabs.map(lineTabButton));
+      section.replaceChildren(heading, grid);
+      return section;
     }),
   );
+}
+
+function lineTabButton(tab) {
+  const button = document.createElement("button");
+  button.type = "button";
+  const isNumberLine = /^[1-9]호선$/.test(tab.name);
+  const label = isNumberLine ? tab.short : tab.label || tab.name;
+  button.className = `line-tab${isNumberLine ? " is-number" : ""}${tab.name === "all" ? " is-all" : ""}${
+    state.selectedLine === tab.name ? " is-active" : ""
+  }`;
+  button.style.setProperty("--line-color", tab.color);
+  button.title = tab.name === "all" ? "전체" : tab.name;
+  button.innerHTML = `<span class="line-dot"></span><span>${escapeHtml(label)}</span>`;
+  button.addEventListener("click", () => {
+    state.selectedLine = tab.name;
+    renderLineTabs();
+    refresh();
+  });
+  return button;
 }
 
 async function refresh() {
@@ -345,11 +365,9 @@ function render() {
   els.statusText.textContent = statusMessage(sorted.length, activeLines.size, missingLineCount, endedLineCount);
   els.lineSummary.textContent =
     state.selectedLine === "all" ? `전체 ${LINES.length}개 노선` : `${state.selectedLine} 실시간 위치`;
-  els.trainSummary.textContent = state.query ? `"${state.query}" 검색 결과` : "현재 운행 위치";
 
   renderMap(sorted);
   renderTrack(sorted);
-  renderTrainList(sorted);
 }
 
 async function loadStationCoordinates() {
@@ -643,13 +661,7 @@ function renderTrack(items) {
       const line = LINES.find((item) => item.name === lineName) || { color: "#141820" };
       const total = state.lineTotals.get(lineName);
       const countText = total && total > trains.length ? `${trains.length}/${total}대` : `${trains.length}대`;
-      const markers = trains.length
-        ? trains
-            .slice()
-            .sort((a, b) => a.stationId - b.stationId || a.directionCode.localeCompare(b.directionCode))
-            .map(markerTemplate)
-            .join("")
-        : `<div class="no-train">${lineEmptyLabel(lineName)}</div>`;
+      const track = trains.length ? lineTrackTemplate(trains) : `<div class="no-train">${lineEmptyLabel(lineName)}</div>`;
 
       return `
         <article class="line-strip${trains.length ? "" : " is-empty"}" style="--line-color:${line.color}">
@@ -657,7 +669,7 @@ function renderTrack(items) {
             <strong>${escapeHtml(lineName)}</strong>
             <span>${countText}</span>
           </div>
-          <div class="strip-scroll">${markers}</div>
+          ${track}
         </article>
       `;
     });
@@ -665,85 +677,74 @@ function renderTrack(items) {
   els.trackBoard.innerHTML = fragments.join("");
 }
 
-function markerTemplate(train) {
+function lineTrackTemplate(trains) {
+  const ordered = trains
+    .slice()
+    .sort((a, b) => a.stationId - b.stationId || a.directionCode.localeCompare(b.directionCode) || a.trainNo.localeCompare(b.trainNo));
+  const bounds = trackBounds(ordered);
+  const width = Math.max(720, Math.min(5200, ordered.length * 92));
+  const markers = ordered.map((train, index) => trackMarkerTemplate(train, index, ordered.length)).join("");
+
   return `
-    <div class="marker" style="--line-color:${train.lineColor}">
-      <div class="marker-top">
-        <span>${escapeHtml(train.direction)}</span>
-        <span>${escapeHtml(train.formation)}</span>
-      </div>
-      <strong>${escapeHtml(train.station)}</strong>
-      <div class="badge-row">
-        <span class="badge ${train.statusClass}">${escapeHtml(train.status)}</span>
-        ${train.express ? `<span class="badge">급행</span>` : ""}
-        ${train.last ? `<span class="badge status-last">막차</span>` : ""}
-      </div>
-    </div>
-  `;
-}
-
-function renderTrainList(items) {
-  if (items.length === 0) {
-    els.trainList.innerHTML = `<div class="empty-state">${emptyStateMessage()}</div>`;
-    return;
-  }
-
-  if (state.selectedLine !== "all") {
-    els.trainList.innerHTML = `<div class="train-card-grid">${items.map((train) => trainCardTemplate(train, false)).join("")}</div>`;
-    return;
-  }
-
-  const groups = groupBy(items, "lineName");
-  const displayLines = LINES.filter((line) => groups.has(line.name));
-  els.trainList.innerHTML = `
-    <div class="train-line-groups">
-      ${displayLines
-        .map((line) => {
-          const trains = groups.get(line.name) || [];
-          return `
-            <section class="train-line-group" style="--line-color:${line.color}">
-              <div class="train-line-heading">
-                <strong>${escapeHtml(line.name)}</strong>
-                <span>${trains.length}대</span>
-              </div>
-              <div class="train-card-grid">
-                ${trains.map((train) => trainCardTemplate(train, false)).join("")}
-              </div>
-            </section>
-          `;
-        })
-        .join("")}
-    </div>
-  `;
-}
-
-function trainCardTemplate(train, showLineBadge = true) {
-  return `
-    <article class="train-card" style="--line-color:${train.lineColor}">
-      <header>
-        <div>
-          <div class="badge-row">
-            ${
-              showLineBadge
-                ? `<span class="badge" style="background:${train.lineColor}; color:${readableTextColor(train.lineColor)}">${escapeHtml(train.lineName)}</span>`
-                : ""
-            }
-            <span class="badge ${train.statusClass}">${escapeHtml(train.status)}</span>
-            ${train.express ? `<span class="badge">급행</span>` : ""}
-            ${train.last ? `<span class="badge status-last">막차</span>` : ""}
-          </div>
-          <h3>${escapeHtml(train.station)}</h3>
+    <div class="route-track">
+      <div class="route-track-inner" style="--track-width:${width}px">
+        <div class="route-rail" aria-hidden="true"></div>
+        <div class="route-endpoints" aria-hidden="true">
+          <span>${escapeHtml(bounds.start?.station || "시작")}</span>
+          <span>${escapeHtml(bounds.end?.station || "끝")}</span>
         </div>
-        <span class="train-number">${escapeHtml(train.trainNo)}</span>
-      </header>
-      <div class="train-meta">
-        <div><span>방향</span><strong>${escapeHtml(train.direction)}</strong></div>
-        <div><span>편성</span><strong>${escapeHtml(train.formation)}</strong></div>
-        <div><span>행선지</span><strong>${escapeHtml(train.destination)}</strong></div>
-        <div><span>수신</span><strong>${escapeHtml(formatRecordTime(train.recordedAt))}</strong></div>
+        <div class="route-markers">
+          ${markers}
+        </div>
       </div>
-    </article>
+    </div>
   `;
+}
+
+function trackBounds(ordered) {
+  const withStationId = ordered.filter((train) => Number.isFinite(train.stationId) && train.stationId > 0);
+  const source = withStationId.length ? withStationId : ordered;
+  return {
+    min: source[0]?.stationId || 0,
+    max: source[source.length - 1]?.stationId || 0,
+    start: source[0],
+    end: source[source.length - 1],
+  };
+}
+
+function trackMarkerTemplate(train, index, total) {
+  const position = trackPosition(index, total);
+  const stack = index % 3;
+  const title = `${train.lineName} ${train.trainNo} ${train.station} ${train.status}`;
+  const statusLabel = trackStatusLabel(train);
+
+  return `
+    <div class="train-pin ${train.statusClass}" style="--pos:${position}; --stack:${stack}" title="${escapeHtml(title)}">
+      <span class="train-pin-dot"></span>
+      <span class="train-pin-label">
+        <strong>${escapeHtml(train.station)}</strong>
+        <span class="pin-detail">
+          <span class="pin-status">${escapeHtml(statusLabel)}</span>
+          <span class="pin-meta">${escapeHtml(train.trainNo)} · ${escapeHtml(train.direction)}</span>
+        </span>
+      </span>
+    </div>
+  `;
+}
+
+function trackStatusLabel(train) {
+  if (train.status === "도착") return "정차";
+  return train.status || "상태없음";
+}
+
+function trackPosition(index, total) {
+  if (total <= 1) return 50;
+  const raw = (index / (total - 1)) * 100;
+  return clamp(raw, 3, 97).toFixed(2);
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
 }
 
 function emptyStateMessage() {
@@ -787,32 +788,9 @@ function formatClock(date) {
   }).format(date);
 }
 
-function formatRecordTime(value) {
-  if (!value) return "-";
-  const parsed = parseDate(value);
-  if (!Number.isFinite(parsed)) return value;
-  return new Intl.DateTimeFormat("ko-KR", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  }).format(new Date(parsed));
-}
-
 function parseDate(value) {
   if (!value) return 0;
   return new Date(String(value).replace(" ", "T")).getTime();
-}
-
-function readableTextColor(hex) {
-  const value = hex.replace("#", "");
-  const r = parseInt(value.slice(0, 2), 16);
-  const g = parseInt(value.slice(2, 4), 16);
-  const b = parseInt(value.slice(4, 6), 16);
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  return luminance > 0.62 ? "#111827" : "#ffffff";
 }
 
 function escapeHtml(value) {
