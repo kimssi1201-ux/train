@@ -11,7 +11,16 @@
       integrity="sha256-p4NxAoJBhIINfQK3p2ATbUXiOqMkpOun8i3Tf4phxDk="
       crossorigin=""
     />
-    <link rel="stylesheet" href="./styles.css?v=web-20260619-2335" />
+    <link rel="stylesheet" href="./styles.css?v=hidden-key-20260619" />
+    <style>
+      .app-internals[hidden] {
+        display: none !important;
+      }
+
+      .control-grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    </style>
   </head>
   <body>
     <div class="app-shell">
@@ -46,33 +55,35 @@
               <span>검색</span>
               <input id="searchInput" type="search" placeholder="역명, 행선지, 열차번호" autocomplete="off" />
             </label>
-            <label class="field api-field">
-              <span>API 인증키</span>
-              <input id="apiKeyInput" type="password" placeholder="sample" autocomplete="off" />
-            </label>
-            <button class="text-button" id="saveKeyButton" type="button">저장</button>
-            <label class="switch">
-              <input id="autoRefresh" type="checkbox" checked />
-              <span></span>
-              <strong>자동</strong>
-            </label>
+            <div class="app-internals" hidden aria-hidden="true">
+              <label>
+                <span>API 인증키</span>
+                <input id="apiKeyInput" type="password" placeholder="sample" autocomplete="off" />
+              </label>
+              <button id="saveKeyButton" type="button">저장</button>
+              <label>
+                <input id="autoRefresh" type="checkbox" checked />
+                <span></span>
+                <strong>자동</strong>
+              </label>
+            </div>
           </div>
         </section>
 
-        <section class="metric-grid" aria-label="요약">
-          <article class="metric">
+        <section class="metric-grid app-internals" hidden aria-hidden="true">
+          <article>
             <span>표시 열차</span>
             <strong id="visibleCount">0</strong>
           </article>
-          <article class="metric">
+          <article>
             <span>지원 노선</span>
             <strong id="lineCount">0</strong>
           </article>
-          <article class="metric">
+          <article>
             <span>기준 시각</span>
             <strong id="updatedAt">-</strong>
           </article>
-          <article class="metric">
+          <article>
             <span>데이터</span>
             <strong id="dataMode">sample</strong>
           </article>
@@ -127,6 +138,6 @@
         };
       }
     </script>
-    <script src="./app.js?v=web-20260619-2335"></script>
+    <script src="./app.js?v=hidden-key-20260619"></script>
   </body>
 </html>
