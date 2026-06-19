@@ -28,4 +28,5 @@ python -m http.server 8080
 - Framework preset: `None`
 - Build command: 비워두기
 - Build output directory: `/` 또는 `.`
+- `functions/api/subway/[[path]].js`가 서울 열린데이터광장 HTTP API를 프록시하므로 HTTPS 배포에서도 실시간 위치 호출이 동작합니다.
 - 배포 후 앱 상단 `API 인증키`에 서울 열린데이터광장 인증키를 저장하면 샘플 제한 없이 더 많은 열차를 볼 수 있습니다.
