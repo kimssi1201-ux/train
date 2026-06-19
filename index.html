@@ -123,6 +123,19 @@
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
       crossorigin=""
     ></script>
+    <script>
+      if (location.protocol === "https:") {
+        const originalFetch = window.fetch.bind(window);
+        window.fetch = (input, init) => {
+          const url = typeof input === "string" ? input : input?.url;
+          if (url?.startsWith("http://swopenapi.seoul.go.kr/api/subway/")) {
+            const proxied = url.replace("http://swopenapi.seoul.go.kr/api/subway", "/api/subway");
+            return originalFetch(proxied, init);
+          }
+          return originalFetch(input, init);
+        };
+      }
+    </script>
     <script src="./app.js"></script>
   </body>
 </html>
