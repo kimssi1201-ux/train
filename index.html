@@ -11,7 +11,7 @@
       integrity="sha256-p4NxAoJBhIINfQK3p2ATbUXiOqMkpOun8i3Tf4phxDk="
       crossorigin=""
     />
-    <link rel="stylesheet" href="./styles.css?v=status-labels-20260620" />
+    <link rel="stylesheet" href="./styles.css?v=clean-train-icon-20260620" />
     <style>
       .app-internals[hidden] {
         display: none !important;
@@ -28,83 +28,55 @@
 
       .map-train {
         position: relative;
-        display: block;
-        width: 68px;
-        height: 68px;
+        display: grid;
+        width: 64px;
+        height: 62px;
+        justify-items: center;
         filter: drop-shadow(0 8px 12px rgba(20, 24, 32, 0.24));
       }
 
-      .map-train-face {
+      .map-train::before {
         position: absolute;
-        top: 2px;
-        left: 15px;
-        display: block;
-        width: 38px;
-        height: 38px;
-        border: 3px solid #fff;
-        border-radius: 15px 15px 12px 12px;
-        background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0) 38%),
-          var(--train-color);
-      }
-
-      .map-train-face::after {
-        position: absolute;
-        right: 11px;
-        bottom: 7px;
-        left: 11px;
-        height: 4px;
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.92);
-        content: "";
-      }
-
-      .map-train-window {
-        position: absolute;
-        top: 7px;
-        right: 7px;
-        left: 7px;
-        height: 13px;
-        border-radius: 6px 6px 4px 4px;
-        background:
-          linear-gradient(90deg, transparent calc(50% - 1px), rgba(20, 24, 32, 0.14) 0 calc(50% + 1px), transparent 0),
-          #eaf8ff;
-        box-shadow: inset 0 -2px 0 rgba(20, 24, 32, 0.08);
-      }
-
-      .map-train-lights {
-        position: absolute;
-        right: 8px;
-        bottom: 10px;
-        left: 8px;
-        display: flex;
-        justify-content: space-between;
-      }
-
-      .map-train-lights i {
-        width: 6px;
-        height: 6px;
-        border-radius: 999px;
-        background: #fff7c2;
-        box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.55);
-      }
-
-      .map-train::after {
-        position: absolute;
-        top: 38px;
+        top: 31px;
         left: 50%;
-        width: 22px;
-        height: 8px;
-        border-radius: 0 0 999px 999px;
-        background: #fff;
+        width: 12px;
+        height: 12px;
+        border-right: 3px solid #fff;
+        border-bottom: 3px solid #fff;
+        background: var(--train-color);
         content: "";
-        transform: translateX(-50%);
+        transform: translateX(-50%) rotate(45deg);
+      }
+
+      .map-train-symbol {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        width: 42px;
+        height: 42px;
+        place-items: center;
+        border: 3px solid #fff;
+        border-radius: 999px;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 50%),
+          var(--train-color);
+        box-shadow: 0 4px 10px rgba(20, 24, 32, 0.18);
+      }
+
+      .map-train-symbol svg {
+        width: 25px;
+        height: 25px;
+        fill: none;
+        stroke: #fff;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 1.9;
       }
 
       .map-train-badge {
         position: absolute;
         top: -2px;
-        right: 8px;
+        right: 6px;
         display: grid;
         min-width: 20px;
         height: 20px;
@@ -121,8 +93,9 @@
 
       .map-train-status {
         position: absolute;
-        bottom: 0;
+        bottom: 1px;
         left: 50%;
+        z-index: 2;
         display: grid;
         min-width: 38px;
         height: 21px;
@@ -313,17 +286,22 @@
             className: "train-map-icon",
             html: `
               <span class="map-train ${statusClasses[statusIndex] || ""}" style="--train-color:${color}">
-                <span class="map-train-face" aria-hidden="true">
-                  <span class="map-train-window"></span>
-                  <span class="map-train-lights"><i></i><i></i></span>
+                <span class="map-train-symbol" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M7 4h10a3 3 0 0 1 3 3v7a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V7a3 3 0 0 1 3-3Z" />
+                    <path d="M7 8h10v5H7z" />
+                    <path d="M8 21l2-3M16 18l2 3" />
+                    <circle cx="8.5" cy="15.5" r="1.1" />
+                    <circle cx="15.5" cy="15.5" r="1.1" />
+                  </svg>
                 </span>
                 ${count > 1 ? `<span class="map-train-badge">${count}</span>` : ""}
                 <span class="map-train-status">${statusLabels[statusIndex] || "상태"}</span>
               </span>
             `,
-            iconSize: [68, 68],
-            iconAnchor: [34, 56],
-            popupAnchor: [0, -52],
+            iconSize: [64, 62],
+            iconAnchor: [32, 50],
+            popupAnchor: [0, -48],
           });
 
         window.L.circleMarker = (latlng, options = {}) => {
@@ -346,6 +324,6 @@
         window.L.__cuteTrainMarkerPatched = true;
       }
     </script>
-    <script src="./app.js?v=status-labels-20260620"></script>
+    <script src="./app.js?v=clean-train-icon-20260620"></script>
   </body>
 </html>
