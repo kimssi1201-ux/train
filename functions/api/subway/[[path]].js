@@ -5,6 +5,17 @@ export async function onRequest({ request, env, waitUntil }) {
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: corsHeaders() });
     }
+    if (request.method !== "GET") {
+      return jsonResponse(
+        {
+          errorMessage: {
+            code: "METHOD-001",
+            message: "Only GET requests are supported.",
+          },
+        },
+        405,
+      );
+    }
 
     const url = new URL(request.url);
     const suffix = url.pathname.replace(/^\/api\/subway\/?/, "");
