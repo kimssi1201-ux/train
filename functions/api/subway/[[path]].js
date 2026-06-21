@@ -112,7 +112,8 @@ function withInternalKey(suffix, env) {
 function isSuccessfulSeoulBody(body) {
   try {
     const payload = JSON.parse(body);
-    return payload?.errorMessage?.code === "INFO-000";
+    const code = payload?.errorMessage?.code || payload?.code;
+    return code === "INFO-000" || code === "INFO-200";
   } catch (error) {
     return false;
   }
