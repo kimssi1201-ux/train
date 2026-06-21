@@ -1,7 +1,11 @@
 const API_BASE = "http://swopenapi.seoul.go.kr/api/subway";
+const SERVER_API_BASE = "/api/subway";
 const STATION_COORDS_URL = "https://raw.githubusercontent.com/chanyou/open-seoul-subway/master/station_code.csv";
 const STORAGE_KEY = "metro-live-api-key";
-const REFRESH_MS = 30000;
+const REFRESH_MS = 120000;
+const ALL_LINES_REFRESH_MS = 0;
+const LINE_CACHE_MS = 120000;
+const ALL_LINE_CACHE_MS = 10 * 60 * 1000;
 
 const LINES = [
   { name: "1호선", short: "1", color: "#0052a4" },
@@ -90,10 +94,11 @@ const EVERLINE_STATIONS = [
 ];
 
 const state = {
-  selectedLine: "all",
+  selectedLine: "2호선",
   query: "",
   positions: [],
   lineTotals: new Map(),
+  lineCache: new Map(),
   stationCoords: new Map(),
   errors: [],
   isLoading: false,
@@ -108,14 +113,7 @@ const state = {
 const els = {
   lineTabs: document.querySelector("#lineTabs"),
   searchInput: document.querySelector("#searchInput"),
-  apiKeyInput: document.querySelector("#apiKeyInput"),
-  saveKeyButton: document.querySelector("#saveKeyButton"),
-  autoRefresh: document.querySelector("#autoRefresh"),
   refreshButton: document.querySelector("#refreshButton"),
-  visibleCount: document.querySelector("#visibleCount"),
-  lineCount: document.querySelector("#lineCount"),
-  updatedAt: document.querySelector("#updatedAt"),
-  dataMode: document.querySelector("#dataMode"),
   statusText: document.querySelector("#statusText"),
   mapCanvas: document.querySelector("#mapCanvas"),
   mapSummary: document.querySelector("#mapSummary"),
@@ -128,8 +126,6 @@ const els = {
 
 function init() {
   renderLineTabs();
-  els.lineCount.textContent = String(LINES.length);
-  els.apiKeyInput.value = localStorage.getItem(STORAGE_KEY) || "";
   bindEvents();
   loadStationCoordinates();
   refresh();
@@ -144,25 +140,8 @@ function bindEvents() {
 
   els.sortSelect.addEventListener("change", render);
 
-  els.saveKeyButton.addEventListener("click", () => {
-    const key = els.apiKeyInput.value.trim();
-    if (key) {
-      localStorage.setItem(STORAGE_KEY, key);
-      showToast("인증키를 저장했습니다.");
-    } else {
-      localStorage.removeItem(STORAGE_KEY);
-      showToast("sample 키로 전환했습니다.");
-    }
-    refresh();
-  });
-
-  els.refreshButton.addEventListener("click", refresh);
+  els.refreshButton.addEventListener("click", () => refresh({ force: true }));
   els.fitMapButton.addEventListener("click", () => fitMapToMarkers(true));
-
-  els.autoRefresh.addEventListener("change", () => {
-    scheduleRefresh();
-    showToast(els.autoRefresh.checked ? "자동 새로고침 켜짐" : "자동 새로고침 꺼짐");
-  });
 }
 
 function renderLineTabs() {
@@ -192,25 +171,26 @@ function renderLineTabs() {
 }
 
 function lineTabButton(tab) {
-  const button = document.createElement("button");
-  button.type = "button";
-  const isNumberLine = /^[1-9]호선$/.test(tab.name);
-  const label = isNumberLine ? tab.short : tab.label || tab.name;
-  button.className = `line-tab${isNumberLine ? " is-number" : ""}${tab.name === "all" ? " is-all" : ""}${
-    state.selectedLine === tab.name ? " is-active" : ""
-  }`;
-  button.style.setProperty("--line-color", tab.color);
-  button.title = tab.name === "all" ? "전체" : tab.name;
-  button.innerHTML = `<span class="line-dot"></span><span>${escapeHtml(label)}</span>`;
-  button.addEventListener("click", () => {
-    state.selectedLine = tab.name;
-    renderLineTabs();
-    refresh();
-  });
-  return button;
+      const button = document.createElement("button");
+      button.type = "button";
+      const isNumberLine = /^[1-9]호선$/.test(tab.name);
+      const label = isNumberLine ? tab.short : tab.label || tab.name;
+      button.className = `line-tab${isNumberLine ? " is-number" : ""}${tab.name === "all" ? " is-all" : ""}${
+        state.selectedLine === tab.name ? " is-active" : ""
+      }`;
+      button.style.setProperty("--line-color", tab.color);
+      button.title = tab.name === "all" ? "전체" : tab.name;
+      button.innerHTML = `<span class="line-dot"></span><span>${escapeHtml(label)}</span>`;
+      button.addEventListener("click", () => {
+        state.selectedLine = tab.name;
+        renderLineTabs();
+        scheduleRefresh();
+        refresh();
+      });
+      return button;
 }
 
-async function refresh() {
+async function refresh({ force = false } = {}) {
   if (state.isLoading) return;
   state.isLoading = true;
   state.usingFallback = false;
@@ -219,7 +199,8 @@ async function refresh() {
 
   try {
     const targetLines = state.selectedLine === "all" ? LINES : LINES.filter((line) => line.name === state.selectedLine);
-    const results = await Promise.allSettled(targetLines.map(fetchLinePositions));
+    const allowCache = !force || state.selectedLine === "all";
+    const results = await Promise.allSettled(targetLines.map((line) => fetchLinePositions(line, { allowCache })));
     const positions = [];
     const totals = new Map();
     const errors = [];
@@ -256,15 +237,22 @@ async function refresh() {
   }
 }
 
-async function fetchLinePositions(line) {
-  const key = getApiKey();
-  const isSample = key.toLowerCase() === "sample";
-  const endRow = isSample ? 5 : 160;
+async function fetchLinePositions(line, { allowCache = true } = {}) {
+  const cacheKey = line.name;
+  const cached = state.lineCache.get(cacheKey);
+  const cacheMs = state.selectedLine === "all" ? ALL_LINE_CACHE_MS : LINE_CACHE_MS;
+  const now = Date.now();
+
+  if (allowCache && cached && now - cached.fetchedAt < cacheMs) {
+    return cached.value;
+  }
+
   const apiLineName = line.apiName || line.name;
-  const url = `${API_BASE}/${encodeURIComponent(key)}/json/realtimePosition/0/${endRow}/${encodeURIComponent(apiLineName)}`;
-  const response = await fetch(url, { cache: "no-store" });
+  const url = linePositionUrl(apiLineName);
+  const response = await fetch(url);
 
   if (!response.ok) {
+    if (cached) return cached.value;
     throw new Error(`HTTP ${response.status}`);
   }
 
@@ -272,20 +260,42 @@ async function fetchLinePositions(line) {
   const message = data.errorMessage;
 
   if (message && message.code && message.code !== "INFO-000") {
+    if (cached) return cached.value;
     throw new Error(message.message || message.code);
   }
 
   const rows = Array.isArray(data.realtimePositionList) ? data.realtimePositionList : [];
   const total = Number(message?.total ?? rows[0]?.totalCount ?? rows.length);
 
-  return {
+  const value = {
     total,
     positions: rows.map((row) => normalizeRow(row, line)),
   };
+  state.lineCache.set(cacheKey, { fetchedAt: now, value });
+  return value;
 }
 
-function getApiKey() {
-  return localStorage.getItem(STORAGE_KEY) || els.apiKeyInput.value.trim() || "sample";
+function linePositionUrl(apiLineName) {
+  const savedKey = getSavedApiKey();
+  const useServerKey = shouldUseServerKey();
+  const key = savedKey || "sample";
+  const endRow = useServerKey || key.toLowerCase() !== "sample" ? 160 : 5;
+  const path = `json/realtimePosition/0/${endRow}/${encodeURIComponent(apiLineName)}`;
+
+  return useServerKey ? `${SERVER_API_BASE}/${path}` : `${API_BASE}/${encodeURIComponent(key)}/${path}`;
+}
+
+function shouldUseServerKey() {
+  if (location.protocol !== "https:") return false;
+  return !["raw.githack.com", "raw.githubusercontent.com", "cdn.jsdelivr.net"].includes(location.hostname);
+}
+
+function getSavedApiKey() {
+  try {
+    return localStorage.getItem(STORAGE_KEY) || "";
+  } catch (error) {
+    return "";
+  }
 }
 
 function normalizeRow(row, line) {
@@ -357,11 +367,6 @@ function render() {
   const missingLineCount = state.selectedLine === "all" ? Math.max(0, LINES.length - activeLines.size) : 0;
   const endedLineCount =
     state.selectedLine === "all" ? LINES.filter((line) => !activeLines.has(line.name) && lineIsEnded(line.name)).length : 0;
-  const mode = getApiKey() === "sample" ? "sample" : "live key";
-
-  els.visibleCount.textContent = String(sorted.length);
-  els.updatedAt.textContent = state.lastUpdated ? formatClock(state.lastUpdated) : "-";
-  els.dataMode.textContent = state.usingFallback ? "demo" : mode;
   els.statusText.textContent = statusMessage(sorted.length, activeLines.size, missingLineCount, endedLineCount);
   els.lineSummary.textContent =
     state.selectedLine === "all" ? `전체 ${LINES.length}개 노선` : `${state.selectedLine} 실시간 위치`;
@@ -450,13 +455,10 @@ function renderMap(items) {
 
   markerGroups.forEach((group) => {
     const color = group.trains[0]?.lineColor || "#141820";
-    const marker = window.L.circleMarker([group.lat, group.lng], {
-      radius: Math.min(18, 8 + group.trains.length * 1.3),
-      color,
-      fillColor: color,
-      fillOpacity: 0.78,
-      opacity: 0.95,
-      weight: 3,
+    const marker = window.L.marker([group.lat, group.lng], {
+      icon: trainMapIcon(group, color),
+      title: `${group.station} 열차 ${group.trains.length}대`,
+      zIndexOffset: 100,
     });
     marker.bindPopup(mapPopupTemplate(group));
     marker.addTo(state.mapLayer);
@@ -470,6 +472,36 @@ function renderMap(items) {
   const mappedCount = markerGroups.reduce((sum, group) => sum + group.trains.length, 0);
   const missing = Math.max(0, items.length - mappedCount);
   els.mapSummary.textContent = mapSummaryText(mappedCount, missing, everlineStationCount);
+}
+
+function trainMapIcon(group, color) {
+  const count = group.trains.length;
+  const primaryTrain = group.trains[0] || {};
+  const statusClass = primaryTrain.statusClass || "";
+  const statusLabel = trackStatusLabel(primaryTrain);
+  const badge = count > 1 ? `<span class="map-train-badge">${count}</span>` : "";
+
+  return window.L.divIcon({
+    className: "train-map-icon",
+    html: `
+      <span class="map-train ${statusClass}" style="--train-color:${color}">
+        <span class="map-train-symbol" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <path d="M7 4h10a3 3 0 0 1 3 3v7a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V7a3 3 0 0 1 3-3Z" />
+            <path d="M7 8h10v5H7z" />
+            <path d="M8 21l2-3M16 18l2 3" />
+            <circle cx="8.5" cy="15.5" r="1.1" />
+            <circle cx="15.5" cy="15.5" r="1.1" />
+          </svg>
+        </span>
+        ${badge}
+        <span class="map-train-status">${escapeHtml(statusLabel)}</span>
+      </span>
+    `,
+    iconSize: [64, 62],
+    iconAnchor: [32, 50],
+    popupAnchor: [0, -48],
+  });
 }
 
 function renderEverlineOverlay(bounds) {
@@ -811,9 +843,8 @@ function showToast(message) {
 
 function scheduleRefresh() {
   window.clearInterval(state.timer);
-  if (els.autoRefresh.checked) {
-    state.timer = window.setInterval(refresh, REFRESH_MS);
-  }
+  const interval = state.selectedLine === "all" ? ALL_LINES_REFRESH_MS : REFRESH_MS;
+  state.timer = interval ? window.setInterval(refresh, interval) : null;
 }
 
 init();
