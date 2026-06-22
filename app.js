@@ -94,7 +94,7 @@ const EVERLINE_STATIONS = [
 ];
 
 const state = {
-  selectedLine: "2호선",
+  selectedLine: "all",
   query: "",
   positions: [],
   lineTotals: new Map(),
@@ -258,6 +258,12 @@ async function fetchLinePositions(line, { allowCache = true } = {}) {
 
   const data = await response.json();
   const message = data.errorMessage;
+
+  if (message?.code === "INFO-200") {
+    const value = { total: 0, positions: [] };
+    state.lineCache.set(cacheKey, { fetchedAt: now, value });
+    return value;
+  }
 
   if (message && message.code && message.code !== "INFO-000") {
     if (cached) return cached.value;
