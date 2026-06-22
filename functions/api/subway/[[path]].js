@@ -1,4 +1,4 @@
-const CACHE_TTL_SECONDS = 300;
+const CACHE_TTL_SECONDS = 900;
 
 export async function onRequest({ request, env, waitUntil }) {
   try {
