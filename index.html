@@ -259,11 +259,90 @@
     <script>
       if (location.protocol === "https:") {
         const originalFetch = window.fetch.bind(window);
+        const liveCacheKey = "metro-live-fetch-cache-v1";
+        const dailyKey = "metro-live-api-daily-budget";
+        const liveCacheMs = 15 * 60 * 1000;
+        const dailyBudget = 850;
+        const burstLimit = 6;
+        const burstWindowMs = 20000;
+        let burstStartedAt = 0;
+        let burstCount = 0;
+
+        const todayKey = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
+        const readJson = (key, fallback) => {
+          try {
+            return JSON.parse(localStorage.getItem(key) || "null") || fallback;
+          } catch (error) {
+            return fallback;
+          }
+        };
+        const writeJson = (key, value) => {
+          try {
+            localStorage.setItem(key, JSON.stringify(value));
+          } catch (error) {}
+        };
+        const emptySubwayResponse = () =>
+          new Response(
+            JSON.stringify({
+              errorMessage: { code: "INFO-200", message: "API 호출 보호로 빈 응답을 표시합니다.", total: 0 },
+              realtimePositionList: [],
+            }),
+            { headers: { "Content-Type": "application/json; charset=utf-8", "X-Subway-Guard": "BYPASS" } },
+          );
+        const canCallApi = () => {
+          const now = Date.now();
+          if (now - burstStartedAt > burstWindowMs) {
+            burstStartedAt = now;
+            burstCount = 0;
+          }
+
+          const date = todayKey();
+          const usage = readJson(dailyKey, { date, count: 0 });
+          const normalizedUsage = usage.date === date ? usage : { date, count: 0 };
+          return burstCount < burstLimit && normalizedUsage.count < dailyBudget;
+        };
+        const recordApiCall = () => {
+          burstCount += 1;
+          const date = todayKey();
+          const usage = readJson(dailyKey, { date, count: 0 });
+          const normalizedUsage = usage.date === date ? usage : { date, count: 0 };
+          normalizedUsage.count += 1;
+          writeJson(dailyKey, normalizedUsage);
+        };
+        const guardedSubwayFetch = async (url, init) => {
+          const cache = readJson(liveCacheKey, {});
+          const cached = cache[url];
+          if (cached && Date.now() - cached.savedAt < liveCacheMs) {
+            return new Response(cached.body, {
+              status: cached.status || 200,
+              headers: { "Content-Type": "application/json; charset=utf-8", "X-Subway-Guard": "HIT" },
+            });
+          }
+          if (!canCallApi()) return emptySubwayResponse();
+
+          recordApiCall();
+          const response = await originalFetch(url, init);
+          if (response.ok) {
+            response
+              .clone()
+              .text()
+              .then((body) => {
+                cache[url] = { savedAt: Date.now(), status: response.status, body };
+                writeJson(liveCacheKey, cache);
+              })
+              .catch(() => {});
+          }
+          return response;
+        };
+
         window.fetch = (input, init) => {
           const url = typeof input === "string" ? input : input?.url;
           if (url?.startsWith("http://swopenapi.seoul.go.kr/api/subway/")) {
             const proxied = url.replace("http://swopenapi.seoul.go.kr/api/subway", "/api/subway");
-            return originalFetch(proxied, init);
+            return guardedSubwayFetch(proxied, init);
+          }
+          if (url?.startsWith("/api/subway/") && url.includes("/realtimePosition/")) {
+            return guardedSubwayFetch(url, init);
           }
           return originalFetch(input, init);
         };
