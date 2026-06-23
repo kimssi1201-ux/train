@@ -392,6 +392,157 @@
         window.L.__cuteTrainMarkerPatched = true;
       }
     </script>
-    <script src="./app.js?v=api-throttle-20260621"></script>
+    <script src="./app.js?v=map-summary-20260623"></script>
+    <script>
+      function renderMap(items) {
+        if (!els.mapCanvas) return;
+
+        if (!window.L) {
+          els.mapSummary.textContent = "지도 라이브러리 로딩 중";
+          return;
+        }
+
+        ensureMap();
+        requestAnimationFrame(() => state.map.invalidateSize());
+        state.mapLayer.clearLayers();
+
+        const bounds = [];
+        const useLineSummaryMap = state.selectedLine === "all" && !state.query;
+        const mappedCount = useLineSummaryMap ? renderLineSummaryMap(items, bounds) : renderTrainDetailMap(items, bounds);
+        const everlineStationCount = renderEverlineOverlay(bounds);
+        state.mapBounds = bounds.length ? window.L.latLngBounds(bounds) : null;
+        fitMapToMarkers(true);
+
+        const missing = Math.max(0, items.length - mappedCount);
+        els.mapSummary.textContent = useLineSummaryMap
+          ? lineSummaryMapText(mappedCount, lineSummaryGroups(items).length, missing, everlineStationCount)
+          : mapSummaryText(mappedCount, missing, everlineStationCount);
+      }
+
+      function renderTrainDetailMap(items, bounds) {
+        const markerGroups = groupMapMarkers(items);
+
+        markerGroups.forEach((group) => {
+          const color = group.trains[0]?.lineColor || "#141820";
+          const marker = window.L.marker([group.lat, group.lng], {
+            icon: trainMapIcon(group, color),
+            title: `${group.station} 열차 ${group.trains.length}대`,
+            zIndexOffset: 100,
+          });
+          marker.bindPopup(mapPopupTemplate(group));
+          marker.addTo(state.mapLayer);
+          bounds.push([group.lat, group.lng]);
+        });
+
+        return markerGroups.reduce((sum, group) => sum + group.trains.length, 0);
+      }
+
+      function renderLineSummaryMap(items, bounds) {
+        const groups = lineSummaryGroups(items);
+
+        groups.forEach((group) => {
+          const marker = window.L.marker([group.lat, group.lng], {
+            icon: lineSummaryIcon(group),
+            title: `${group.lineName} 열차 ${group.trains.length}대`,
+            zIndexOffset: 100,
+          });
+          marker.bindPopup(lineSummaryPopupTemplate(group));
+          marker.addTo(state.mapLayer);
+          bounds.push([group.lat, group.lng]);
+        });
+
+        return groups.reduce((sum, group) => sum + group.trains.length, 0);
+      }
+
+      function lineSummaryGroups(items) {
+        const groups = new Map();
+
+        items.forEach((train) => {
+          const coord = state.stationCoords.get(normalizeStationName(train.station));
+          if (!coord) return;
+
+          const line = LINES.find((item) => item.name === train.lineName) || {
+            name: train.lineName,
+            short: train.shortLine || train.lineName,
+            color: train.lineColor || "#141820",
+          };
+          const group = groups.get(train.lineName) || {
+            lineName: train.lineName,
+            short: line.short,
+            color: line.color,
+            trains: [],
+            stationNames: new Set(),
+            latTotal: 0,
+            lngTotal: 0,
+          };
+          group.trains.push(train);
+          group.stationNames.add(train.station);
+          group.latTotal += coord.lat;
+          group.lngTotal += coord.lng;
+          groups.set(train.lineName, group);
+        });
+
+        return Array.from(groups.values()).map((group) => ({
+          ...group,
+          lat: group.latTotal / group.trains.length,
+          lng: group.lngTotal / group.trains.length,
+          stations: Array.from(group.stationNames),
+        }));
+      }
+
+      function lineSummaryIcon(group) {
+        return window.L.divIcon({
+          className: "train-map-icon",
+          html: `
+            <span class="map-train" style="--train-color:${group.color}">
+              <span class="map-train-symbol" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <path d="M7 4h10a3 3 0 0 1 3 3v7a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V7a3 3 0 0 1 3-3Z" />
+                  <path d="M7 8h10v5H7z" />
+                  <path d="M8 21l2-3M16 18l2 3" />
+                  <circle cx="8.5" cy="15.5" r="1.1" />
+                  <circle cx="15.5" cy="15.5" r="1.1" />
+                </svg>
+              </span>
+              <span class="map-train-badge">${group.trains.length}</span>
+              <span class="map-train-status">${escapeHtml(group.short)}</span>
+            </span>
+          `,
+          iconSize: [64, 62],
+          iconAnchor: [32, 50],
+          popupAnchor: [0, -48],
+        });
+      }
+
+      function lineSummaryMapText(mappedCount, lineCount, missing, everlineStationCount) {
+        const parts = [];
+        if (lineCount) parts.push(`${lineCount}개 노선 묶음`);
+        if (mappedCount) parts.push(`열차 ${mappedCount}대`);
+        if (missing) parts.push(`${missing}대 좌표 없음`);
+        if (everlineStationCount) parts.push(`에버라인 역 ${everlineStationCount}개`);
+
+        return parts.length ? `지도에 ${parts.join(", ")} 표시` : "지도에 표시할 좌표가 없습니다.";
+      }
+
+      function lineSummaryPopupTemplate(group) {
+        const stations = group.stations
+          .slice(0, 8)
+          .map((station) => `<span>${escapeHtml(station)}</span>`)
+          .join("");
+        const more = group.stations.length > 8 ? `<span>외 ${group.stations.length - 8}개 역</span>` : "";
+
+        return `
+          <div class="train-popup">
+            <strong>${escapeHtml(group.lineName)} · 열차 ${group.trains.length}대</strong>
+            ${stations}
+            ${more}
+          </div>
+        `;
+      }
+
+      try {
+        render();
+      } catch (error) {}
+    </script>
   </body>
 </html>
